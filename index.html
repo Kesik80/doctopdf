@@ -10,9 +10,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="doc2pdf">
 
-<!-- Окрашивает верхнюю строку статуса (часы/сигнал) -->
-<!-- Для PWA должен совпадать с theme_color в manifest.json -->
+<!-- === ИСПРАВЛЕНИЕ: Android edge-to-edge + тёмная нижняя панель === -->
+<!-- Android Chrome: явно указываем тёмную навигацию -->
+<meta name="theme-color" content="#0d0f14" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#0d0f14">
+<!-- Android 15+ edge-to-edge: позволяем контенту доходить до краёв -->
+<meta name="android-app" content="app-id=doc2pdf.vercel.app">
+<!-- Chrome для Android: принудительная тёмная навигация -->
+<style>
+  @media (prefers-color-scheme: dark) {
+    meta[name="theme-color"] { content: "#0d0f14"; }
+  }
+</style>
 
 <!-- Подключение манифеста и иконки -->
 <link rel="manifest" href="/icons/manifest.json">
@@ -24,7 +33,6 @@
 
     :root {
       /* === ИСПРАВЛЕНИЕ: явно указываем тёмную схему === */
-      /* Это заставляет Android перекрасить нижнюю навигационную панель в тёмный цвет */
       color-scheme: dark;
       
       --bg: #0d0f14;
@@ -52,9 +60,25 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: calc(24px + env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
+      /* === ИСПРАВЛЕНИЕ: увеличиваем нижний padding для edge-to-edge === */
+      padding: calc(24px + env(safe-area-inset-top)) 16px calc(64px + env(safe-area-inset-bottom));
       padding-left: calc(16px + env(safe-area-inset-left));
       padding-right: calc(16px + env(safe-area-inset-right));
+      /* === ИСПРАВЛЕНИЕ: принудительно тёмный фон под системной панелью === */
+      background-color: var(--bg);
+    }
+
+    /* === ИСПРАВЛЕНИЕ: псевдоэлемент для нижней системной панели === */
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: env(safe-area-inset-bottom, 0px);
+      background: var(--bg);
+      z-index: 9999;
+      pointer-events: none;
     }
 
     body::before {
@@ -297,6 +321,8 @@
       text-align: center;
       color: var(--muted);
       font-size: 12px;
+      /* === ИСПРАВЛЕНИЕ: footer не должен перекрывать системную панель === */
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -590,7 +616,7 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
         document.head.appendChild(s);
       }
       document.body.appendChild(b);
-      document.getElementById('pwa-action-btn').onclick = onBtnClick;
+      document.getElementBy standalone=document.getElementById('pwa-action-btn').onclick = onBtnClick;
       document.getElementById('pwa-close-btn').onclick = () => {
         b.remove();
         localStorage.setItem('pwa-install-dismissed', Date.now());
