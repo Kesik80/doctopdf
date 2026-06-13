@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="doc2pdf">
 
 <!-- Окрашивает строку статуса (часы/сигнал) и нижнюю панель -->
-<meta id="themeColorMeta" name="theme-color" content="#0a0a0f">
+<meta id="themeColorMeta" name="theme-color" content="#0d0f14">
 
 <!-- Подключение манифеста и иконки -->
 <link rel="manifest" href="/icons/manifest.json">
@@ -533,9 +533,9 @@ function setThemeColor(color) {
 // Реагируем на системную смену день ↔ ночь
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
 darkMQ.addEventListener('change', e => {
-  setThemeColor(e.matches ? '#0a0a0f' : '#ffffff');
+  setThemeColor('#0d0f14');
 });
-setThemeColor(darkMQ.matches ? '#0a0a0f' : '#ffffff');
+setThemeColor('#0d0f14');
 
 // Если у тебя есть своя кнопка темы — вызывай вручную:
 // setThemeColor('#0a0a0f');  // тёмная
