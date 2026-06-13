@@ -84,7 +84,41 @@
     header p {
       color: var(--muted);
       font-size: 15px;
-      line-height: 1.5;
+    }
+
+    /* Counter */
+    .counter-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .counter-bar-bg {
+      width: 120px;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .counter-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width .4s ease, background .4s ease;
+    }
+
+    .counter-label {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .counter-label strong {
+      color: var(--text);
+      font-weight: 600;
     }
 
     .card {
@@ -189,7 +223,6 @@
     .progress-wrap.visible { display: block; }
 
     .progress-label {
-      display: flex; justify-content: space-between;
       font-size: 13px; color: var(--muted);
       margin-bottom: 8px;
     }
@@ -234,30 +267,11 @@
     .alert.success { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25); color: #34d399; }
     .alert.error   { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.25); color: #f87171; }
 
-    .features {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-
-    .feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px 14px;
-      text-align: center;
-    }
-
-    .feature-icon { font-size: 24px; margin-bottom: 8px; display: block; }
-    .feature-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-    .feature-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
-
     footer {
-      margin-top: 32px;
+      margin-top: 8px;
       text-align: center;
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.7;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -274,7 +288,6 @@
     @media (max-width: 540px) {
       .card { padding: 20px 16px; }
       .dropzone { padding: 36px 16px; }
-      .features { grid-template-columns: 1fr; }
       .btn-convert { font-size: 15px; padding: 14px; }
     }
   </style>
@@ -286,7 +299,14 @@
         <div class="logo-icon">📄</div>
         <span class="logo-text">DocToPDF</span>
       </div>
-      <p>Точная конвертация Word документов в PDF<br>с сохранением картинок, таблиц и форматирования</p>
+      <p>Конвертация Word документов в PDF</p>
+
+      <div class="counter-wrap">
+        <div class="counter-bar-bg">
+          <div class="counter-bar-fill" id="counterFill"></div>
+        </div>
+        <span class="counter-label">Осталось сегодня: <strong id="counterNum">—</strong> из 10</span>
+      </div>
     </header>
 
     <div class="card">
@@ -295,7 +315,7 @@
         <span class="dz-icon">⬆️</span>
         <div class="dz-title">Перетащите файл или нажмите для выбора</div>
         <div class="dz-sub">
-          Поддерживается <span>.doc, .docx, .odt, .rtf</span><br>Максимальный размер: 50 МБ
+          <span>.doc, .docx, .odt, .rtf</span> · до 50 МБ
         </div>
       </div>
 
@@ -314,9 +334,7 @@
       </button>
 
       <div class="progress-wrap" id="progressWrap">
-        <div class="progress-label">
-          <span id="progressLabel">Конвертация...</span>
-        </div>
+        <div class="progress-label" id="progressLabel">Конвертация...</div>
         <div class="progress-bar">
           <div class="progress-fill indeterminate" id="progressFill"></div>
         </div>
@@ -328,31 +346,48 @@
       </div>
     </div>
 
-    <div class="features">
-      <div class="feature">
-        <span class="feature-icon">🖼️</span>
-        <div class="feature-title">Картинки</div>
-        <div class="feature-desc">Все встроенные изображения сохраняются</div>
-      </div>
-      <div class="feature">
-        <span class="feature-icon">📊</span>
-        <div class="feature-title">Таблицы</div>
-        <div class="feature-desc">Форматирование таблиц точно передаётся</div>
-      </div>
-      <div class="feature">
-        <span class="feature-icon">🔤</span>
-        <div class="feature-title">Шрифты</div>
-        <div class="feature-desc">Стили, заголовки, отступы — всё сохраняется</div>
-      </div>
-    </div>
-
-    <footer>
-      Конвертация через CloudConvert · LibreOffice engine<br>
-      25 бесплатных конвертаций в день
-    </footer>
+    <footer>Конвертация через CloudConvert · LibreOffice engine</footer>
   </div>
 
   <script>
+    const MAX = 10;
+    const STORAGE_KEY = 'cc_usage';
+
+    // --- Counter ---
+    function getTodayKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    }
+
+    function getUsed() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (raw.day !== getTodayKey()) return 0;
+        return raw.used || 0;
+      } catch { return 0; }
+    }
+
+    function setUsed(n) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ day: getTodayKey(), used: n }));
+    }
+
+    function renderCounter() {
+      const used = getUsed();
+      const left = Math.max(0, MAX - used);
+      const pct = (left / MAX) * 100;
+      document.getElementById('counterNum').textContent = left;
+      const fill = document.getElementById('counterFill');
+      fill.style.width = pct + '%';
+      fill.style.background = left > 3
+        ? 'linear-gradient(90deg, #4f8ef7, #7c5ef7)'
+        : left > 0
+          ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+          : '#ef4444';
+    }
+
+    renderCounter();
+
+    // --- UI ---
     const dropzone    = document.getElementById('dropzone');
     const fileInput   = document.getElementById('fileInput');
     const filePreview = document.getElementById('filePreview');
@@ -389,11 +424,11 @@
       if (!file) return;
       const ext = file.name.split('.').pop().toLowerCase();
       if (!['doc','docx','odt','rtf'].includes(ext)) {
-        showAlert('error', 'Неподдерживаемый формат. Загрузите .doc, .docx, .odt или .rtf файл.');
+        showAlert('error', 'Поддерживаются только .doc, .docx, .odt, .rtf');
         return;
       }
       if (file.size > 50 * 1024 * 1024) {
-        showAlert('error', 'Файл слишком большой. Максимальный размер — 50 МБ.');
+        showAlert('error', 'Файл слишком большой. Максимум — 50 МБ.');
         return;
       }
       selectedFile = file;
@@ -422,15 +457,16 @@
       dropzone.classList.remove('drag-over');
       if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
     });
-
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) setFile(fileInput.files[0]);
-    });
-
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
     removeFile.addEventListener('click', clearFile);
 
     convertBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
+
+      if (getUsed() >= MAX) {
+        showAlert('error', 'Лимит на сегодня исчерпан (10/10). Попробуй завтра.');
+        return;
+      }
 
       convertBtn.disabled = true;
       spinner.classList.add('visible');
@@ -460,6 +496,10 @@
         a.download = pdfName;
         a.click();
         URL.revokeObjectURL(url);
+
+        // Update counter only on success
+        setUsed(getUsed() + 1);
+        renderCounter();
 
         progressFill.className = 'progress-fill';
         progressFill.style.width = '100%';
