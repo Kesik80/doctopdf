@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <!-- PWA: скрывает адресную строку при запуске с экрана -->
@@ -9,20 +10,23 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="doc2pdf">
 
-<!-- Окрашивает строку статуса (часы/сигнал) и нижнюю панель -->
-<meta id="themeColorMeta" name="theme-color" content="#0d0f14">
+<!-- Окрашивает верхнюю строку статуса (часы/сигнал) -->
+<!-- Для PWA должен совпадать с theme_color в manifest.json -->
+<meta name="theme-color" content="#0d0f14">
 
 <!-- Подключение манифеста и иконки -->
 <link rel="manifest" href="/icons/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 <link rel="icon" href="/icons/favicon.ico" sizes="32x32">
-<!-- favicon.ico — иконка для браузерной вкладки на десктопе.
-     Файл лежит в ZIP → icons/favicon.ico -->
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
+      /* === ИСПРАВЛЕНИЕ: явно указываем тёмную схему === */
+      /* Это заставляет Android перекрасить нижнюю навигационную панель в тёмный цвет */
+      color-scheme: dark;
+      
       --bg: #0d0f14;
       --surface: #161a24;
       --surface2: #1e2433;
@@ -538,7 +542,7 @@ darkMQ.addEventListener('change', e => {
 setThemeColor('#0d0f14');
 
 // Если у тебя есть своя кнопка темы — вызывай вручную:
-// setThemeColor('#0a0a0f');  // тёмная
+// setThemeColor('#0d0f14');  // тёмная
 // setThemeColor('#ffffff'); // светлая
 
 
