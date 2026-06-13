@@ -4,7 +4,7 @@
   "description": "",
   "id": "/",
   "start_url": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#0d0f14",
   "theme_color": "#0d0f14",
   "icons": [
