@@ -1,9 +1,24 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DOC → PDF Конвертер</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- PWA: скрывает адресную строку при запуске с экрана -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="doc2pdf">
+
+<!-- Окрашивает строку статуса (часы/сигнал) и нижнюю панель -->
+<meta id="themeColorMeta" name="theme-color" content="#0a0a0f">
+
+<!-- Подключение манифеста и иконки -->
+<link rel="manifest" href="/icons/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+<link rel="icon" href="/icons/favicon.ico" sizes="32x32">
+<!-- favicon.ico — иконка для браузерной вкладки на десктопе.
+     Файл лежит в ZIP → icons/favicon.ico -->
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -501,5 +516,155 @@
       }
     });
   </script>
+  <script>
+
+// ── 1. Динамический theme-color (верх / низ телефона) ──
+function setThemeColor(color) {
+  const meta = document.getElementById('themeColorMeta');
+  if (meta) meta.setAttribute('content', color);
+}
+
+// Реагируем на системную смену день ↔ ночь
+const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+darkMQ.addEventListener('change', e => {
+  setThemeColor(e.matches ? '#0a0a0f' : '#ffffff');
+});
+setThemeColor(darkMQ.matches ? '#0a0a0f' : '#ffffff');
+
+// Если у тебя есть своя кнопка темы — вызывай вручную:
+// setThemeColor('#0a0a0f');  // тёмная
+// setThemeColor('#ffffff'); // светлая
+
+
+// ── 2. Баннер установки (Android + iOS — один баннер для всех) ──
+
+// Не показывать если уже закрыли менее 7 дней назад
+const _dismissed = localStorage.getItem('pwa-install-dismissed');
+if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
+  // тихо пропускаем
+} else {
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  let deferredPrompt = null;
+
+  if (!isInStandalone) {
+
+    // Создаём один баннер
+    function createBanner(btnLabel, onBtnClick) {
+      const b = document.createElement('div');
+      b.id = 'pwa-install-banner';
+      b.style.cssText = 'position:fixed;bottom:20px;left:12px;right:12px;'
+        + 'background:#0a0a0f;color:#fff;border-radius:18px;'
+        + 'padding:14px 16px;display:flex;align-items:center;gap:12px;'
+        + 'box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9000;'
+        + 'font-family:sans-serif;animation:pwaSlideUp .4s cubic-bezier(.32,1,.23,1);';
+      b.innerHTML = `
+        <span style="font-size:28px;flex-shrink:0">📲</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600">doc2pdf</div>
+          <div style="font-size:12px;opacity:.7;margin-top:2px">Добавить на экран</div>
+        </div>
+        <button id="pwa-action-btn" style="flex-shrink:0;padding:8px 16px;background:#fff;
+          color:#0a0a0f;border:none;border-radius:12px;font-size:13px;
+          font-weight:700;cursor:pointer">${btnLabel}</button>
+        <button id="pwa-close-btn" style="flex-shrink:0;background:none;border:none;
+          color:#fff;font-size:18px;cursor:pointer;opacity:.65;padding:2px 4px">✕</button>
+      `;
+      // Добавляем анимацию
+      if (!document.getElementById('pwa-style')) {
+        const s = document.createElement('style');
+        s.id = 'pwa-style';
+        s.textContent = '@keyframes pwaSlideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}';
+        document.head.appendChild(s);
+      }
+      document.body.appendChild(b);
+      document.getElementById('pwa-action-btn').onclick = onBtnClick;
+      document.getElementById('pwa-close-btn').onclick = () => {
+        b.remove();
+        localStorage.setItem('pwa-install-dismissed', Date.now());
+      };
+    }
+
+    if (isIOS) {
+      // iOS Safari — показать баннер с кнопкой «Как?»
+      const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
+      if (isSafari) {
+        setTimeout(() => {
+          createBanner('Как?', () => showIOSGuide());
+        }, 2000);
+      }
+    } else {
+      // Android/Desktop — ждём beforeinstallprompt
+      window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        deferredPrompt = e;
+        setTimeout(() => {
+          createBanner('Установить', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            document.getElementById('pwa-install-banner')?.remove();
+          });
+        }, 1500);
+      });
+      window.addEventListener('appinstalled', () => {
+        document.getElementById('pwa-install-banner')?.remove();
+      });
+    }
+  }
+}
+
+// ── 3. Модальное окно с инструкцией для iOS ──
+function showIOSGuide() {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;'
+    + 'background:rgba(0,0,0,.8);display:flex;align-items:flex-end;padding:12px;';
+  ov.innerHTML = `
+    <div style="background:#1c1c1e;border-radius:22px;padding:24px;width:100%;
+      border:1px solid rgba(255,255,255,.12)">
+      <div style="font-size:17px;font-weight:700;margin-bottom:20px;
+        text-align:center;color:#fff">Установка на iPhone</div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">1</div>
+          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
+            Нажми кнопку <strong style="color:#fff">«Поделиться»</strong>
+            <span style="font-size:18px"> ⎙ </span> внизу Safari
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">2</div>
+          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
+            Выбери <strong style="color:#fff">«На экран «Домой»»</strong>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">3</div>
+          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
+            Нажми <strong style="color:#fff">«Добавить»</strong>
+          </div>
+        </div>
+      </div>
+      <button onclick="this.closest('[style*=inset]').remove()"
+        style="width:100%;margin-top:22px;padding:14px;background:#0a0a0f;
+        color:#fff;border:none;border-radius:14px;font-size:15px;
+        font-weight:600;font-family:sans-serif;cursor:pointer">Понятно</button>
+    </div>
+  `;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+}
+
+</script>
+
 </body>
 </html>
