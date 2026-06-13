@@ -2,28 +2,22 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 
-<!-- PWA: скрывает адресную строку при запуске с экрана -->
+<!-- PWA -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="doc2pdf">
 
-<!-- === ИСПРАВЛЕНИЕ: Android edge-to-edge + тёмная нижняя панель === -->
-<!-- Android Chrome: явно указываем тёмную навигацию -->
-<meta name="theme-color" content="#0d0f14" media="(prefers-color-scheme: dark)">
+<!-- === MIUI/HyperOS + Android: принудительная тёмная навигация === -->
 <meta name="theme-color" content="#0d0f14">
-<!-- Android 15+ edge-to-edge: позволяем контенту доходить до краёв -->
+<!-- Android Chrome: edge-to-edge + тёмная навигация -->
 <meta name="android-app" content="app-id=doc2pdf.vercel.app">
-<!-- Chrome для Android: принудительная тёмная навигация -->
-<style>
-  @media (prefers-color-scheme: dark) {
-    meta[name="theme-color"] { content: "#0d0f14"; }
-  }
-</style>
+<!-- Принудительно тёмный цвет для системных панелей -->
+<meta name="msapplication-navbutton-color" content="#0d0f14">
+<meta name="msapplication-TileColor" content="#0d0f14">
 
-<!-- Подключение манифеста и иконки -->
 <link rel="manifest" href="/icons/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 <link rel="icon" href="/icons/favicon.ico" sizes="32x32">
@@ -32,9 +26,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      /* === ИСПРАВЛЕНИЕ: явно указываем тёмную схему === */
       color-scheme: dark;
-      
       --bg: #0d0f14;
       --surface: #161a24;
       --surface2: #1e2433;
@@ -60,25 +52,46 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      /* === ИСПРАВЛЕНИЕ: увеличиваем нижний padding для edge-to-edge === */
-      padding: calc(24px + env(safe-area-inset-top)) 16px calc(64px + env(safe-area-inset-bottom));
+      /* === Увеличенный нижний отступ для MIUI === */
+      padding: calc(24px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));
       padding-left: calc(16px + env(safe-area-inset-left));
       padding-right: calc(16px + env(safe-area-inset-right));
-      /* === ИСПРАВЛЕНИЕ: принудительно тёмный фон под системной панелью === */
       background-color: var(--bg);
+      /* === Принудительно тёмный скроллбар === */
+      scrollbar-color: var(--surface2) var(--bg);
     }
 
-    /* === ИСПРАВЛЕНИЕ: псевдоэлемент для нижней системной панели === */
+    /* === ПОЛНОЭКРАННЫЙ ОВЕРЛЕЙ: закрашиваем ВСЁ пространство под системной панелью === */
     body::after {
       content: '';
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
-      height: env(safe-area-inset-bottom, 0px);
+      /* Закрашиваем большую область на случай, если системная панель выше стандартной */
+      height: 120px;
       background: var(--bg);
       z-index: 9999;
       pointer-events: none;
+      /* Градиент для плавного перехода */
+      mask: linear-gradient(to top, black 60%, transparent 100%);
+      -webkit-mask: linear-gradient(to top, black 60%, transparent 100%);
+    }
+
+    /* === Дополнительный слой для MIUI: затемняем системную панель === */
+    .system-nav-overlay {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: env(safe-area-inset-bottom, 48px);
+      min-height: 48px;
+      background: rgba(13, 15, 20, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 9998;
+      pointer-events: none;
+      border-top: 1px solid rgba(42, 49, 72, 0.5);
     }
 
     body::before {
@@ -97,6 +110,8 @@
       z-index: 1;
       width: 100%;
       max-width: 680px;
+      /* Убедимся, что контент не уходит под оверлей */
+      padding-bottom: 20px;
     }
 
     header {
@@ -321,8 +336,9 @@
       text-align: center;
       color: var(--muted);
       font-size: 12px;
-      /* === ИСПРАВЛЕНИЕ: footer не должен перекрывать системную панель === */
       padding-bottom: env(safe-area-inset-bottom, 0px);
+      /* Дополнительный отступ для MIUI */
+      margin-bottom: 16px;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -344,6 +360,9 @@
   </style>
 </head>
 <body>
+  <!-- === Оверлей для системной навигации MIUI === -->
+  <div class="system-nav-overlay" id="navOverlay"></div>
+
   <div class="container">
     <header>
       <div class="logo">
@@ -401,6 +420,38 @@
   </div>
 
   <script>
+    // === MIUI/HyperOS: принудительно скрываем системную навигацию ===
+    function hideSystemNav() {
+      // Пробуем Web App API для полноэкранного режима
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      
+      // Для Android: пробуем immersive mode
+      if (window.AndroidFullScreen) {
+        window.AndroidFullScreen.immersiveMode();
+      }
+      
+      // Скрываем оверлей, если системная панель уже скрыта
+      const navOverlay = document.getElementById('navOverlay');
+      if (navOverlay) {
+        // Проверяем, есть ли системная панель
+        const hasNav = window.innerHeight < screen.height;
+        if (!hasNav) {
+          navOverlay.style.display = 'none';
+        }
+      }
+    }
+
+    // Вызываем при загрузке
+    window.addEventListener('load', hideSystemNav);
+    
+    // Также при изменении ориентации
+    window.addEventListener('resize', () => {
+      setTimeout(hideSystemNav, 100);
+    });
+
+    // === Остальной JavaScript без изменений ===
     const counterNum  = document.getElementById('counterNum');
     const counterFill = document.getElementById('counterFill');
 
@@ -429,7 +480,6 @@
 
     fetchBalance();
 
-    // --- UI ---
     const dropzone      = document.getElementById('dropzone');
     const fileInput     = document.getElementById('fileInput');
     const filePreview   = document.getElementById('filePreview');
@@ -539,7 +589,6 @@
         progressLabel.textContent = 'Готово!';
         showAlert('success', `✓ Файл "${pdfName}" успешно конвертирован и загружен.`);
 
-        // Refresh real balance from CloudConvert
         fetchBalance();
 
       } catch (err) {
@@ -553,41 +602,16 @@
     });
   </script>
   <script>
-
-// ── 1. Динамический theme-color (верх / низ телефона) ──
-function setThemeColor(color) {
-  const meta = document.getElementById('themeColorMeta');
-  if (meta) meta.setAttribute('content', color);
-}
-
-// Реагируем на системную смену день ↔ ночь
-const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
-darkMQ.addEventListener('change', e => {
-  setThemeColor('#0d0f14');
-});
-setThemeColor('#0d0f14');
-
-// Если у тебя есть своя кнопка темы — вызывай вручную:
-// setThemeColor('#0d0f14');  // тёмная
-// setThemeColor('#ffffff'); // светлая
-
-
-// ── 2. Баннер установки (Android + iOS — один баннер для всех) ──
-
-// Не показывать если уже закрыли менее 7 дней назад
+// PWA install banner (без изменений)
 const _dismissed = localStorage.getItem('pwa-install-dismissed');
 if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
-  // тихо пропускаем
 } else {
-
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isInStandalone = window.matchMedia('(display-mode: standalone)').matches
     || window.navigator.standalone === true;
   let deferredPrompt = null;
 
   if (!isInStandalone) {
-
-    // Создаём один баннер
     function createBanner(btnLabel, onBtnClick) {
       const b = document.createElement('div');
       b.id = 'pwa-install-banner';
@@ -608,7 +632,6 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
         <button id="pwa-close-btn" style="flex-shrink:0;background:none;border:none;
           color:#fff;font-size:18px;cursor:pointer;opacity:.65;padding:2px 4px">✕</button>
       `;
-      // Добавляем анимацию
       if (!document.getElementById('pwa-style')) {
         const s = document.createElement('style');
         s.id = 'pwa-style';
@@ -616,7 +639,7 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
         document.head.appendChild(s);
       }
       document.body.appendChild(b);
-      document.getElementBy standalone=document.getElementById('pwa-action-btn').onclick = onBtnClick;
+      document.getElementById('pwa-action-btn').onclick = onBtnClick;
       document.getElementById('pwa-close-btn').onclick = () => {
         b.remove();
         localStorage.setItem('pwa-install-dismissed', Date.now());
@@ -624,7 +647,6 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
     }
 
     if (isIOS) {
-      // iOS Safari — показать баннер с кнопкой «Как?»
       const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
       if (isSafari) {
         setTimeout(() => {
@@ -632,7 +654,6 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
         }, 2000);
       }
     } else {
-      // Android/Desktop — ждём beforeinstallprompt
       window.addEventListener('beforeinstallprompt', e => {
         e.preventDefault();
         deferredPrompt = e;
@@ -653,7 +674,6 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
   }
 }
 
-// ── 3. Модальное окно с инструкцией для iOS ──
 function showIOSGuide() {
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;'
@@ -699,8 +719,6 @@ function showIOSGuide() {
   document.body.appendChild(ov);
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
 }
-
 </script>
-
 </body>
 </html>
