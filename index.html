@@ -86,7 +86,6 @@
       font-size: 15px;
     }
 
-    /* Counter */
     .counter-wrap {
       display: flex;
       align-items: center;
@@ -108,6 +107,7 @@
       height: 100%;
       border-radius: 99px;
       transition: width .4s ease, background .4s ease;
+      width: 0%;
     }
 
     .counter-label {
@@ -305,7 +305,7 @@
         <div class="counter-bar-bg">
           <div class="counter-bar-fill" id="counterFill"></div>
         </div>
-        <span class="counter-label">Осталось сегодня: <strong id="counterNum">—</strong> из 10</span>
+        <span class="counter-label">Осталось сегодня: <strong id="counterNum">…</strong> из 10</span>
       </div>
     </header>
 
@@ -350,59 +350,50 @@
   </div>
 
   <script>
-    const MAX = 10;
-    const STORAGE_KEY = 'cc_usage';
+    const counterNum  = document.getElementById('counterNum');
+    const counterFill = document.getElementById('counterFill');
 
-    // --- Counter ---
-    function getTodayKey() {
-      const d = new Date();
-      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    }
-
-    function getUsed() {
+    async function fetchBalance() {
       try {
-        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        if (raw.day !== getTodayKey()) return 0;
-        return raw.used || 0;
-      } catch { return 0; }
+        const res = await fetch('/api/balance');
+        const data = await res.json();
+        if (data.credits != null) renderCounter(data.credits);
+        else counterNum.textContent = '?';
+      } catch {
+        counterNum.textContent = '?';
+      }
     }
 
-    function setUsed(n) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ day: getTodayKey(), used: n }));
-    }
-
-    function renderCounter() {
-      const used = getUsed();
-      const left = Math.max(0, MAX - used);
-      const pct = (left / MAX) * 100;
-      document.getElementById('counterNum').textContent = left;
-      const fill = document.getElementById('counterFill');
-      fill.style.width = pct + '%';
-      fill.style.background = left > 3
+    function renderCounter(credits) {
+      const n = Math.max(0, credits);
+      counterNum.textContent = n;
+      const pct = Math.min(100, (n / 10) * 100);
+      counterFill.style.width = pct + '%';
+      counterFill.style.background = n > 3
         ? 'linear-gradient(90deg, #4f8ef7, #7c5ef7)'
-        : left > 0
+        : n > 0
           ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
           : '#ef4444';
     }
 
-    renderCounter();
+    fetchBalance();
 
     // --- UI ---
-    const dropzone    = document.getElementById('dropzone');
-    const fileInput   = document.getElementById('fileInput');
-    const filePreview = document.getElementById('filePreview');
-    const fileName    = document.getElementById('fileName');
-    const fileSize    = document.getElementById('fileSize');
-    const removeFile  = document.getElementById('removeFile');
-    const convertBtn  = document.getElementById('convertBtn');
-    const btnText     = document.getElementById('btnText');
-    const spinner     = document.getElementById('spinner');
+    const dropzone      = document.getElementById('dropzone');
+    const fileInput     = document.getElementById('fileInput');
+    const filePreview   = document.getElementById('filePreview');
+    const fileName      = document.getElementById('fileName');
+    const fileSize      = document.getElementById('fileSize');
+    const removeFile    = document.getElementById('removeFile');
+    const convertBtn    = document.getElementById('convertBtn');
+    const btnText       = document.getElementById('btnText');
+    const spinner       = document.getElementById('spinner');
     const progressWrap  = document.getElementById('progressWrap');
     const progressFill  = document.getElementById('progressFill');
     const progressLabel = document.getElementById('progressLabel');
-    const alertBox    = document.getElementById('alertBox');
-    const alertIcon   = document.getElementById('alertIcon');
-    const alertText   = document.getElementById('alertText');
+    const alertBox      = document.getElementById('alertBox');
+    const alertIcon     = document.getElementById('alertIcon');
+    const alertText     = document.getElementById('alertText');
 
     let selectedFile = null;
 
@@ -463,11 +454,6 @@
     convertBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
 
-      if (getUsed() >= MAX) {
-        showAlert('error', 'Лимит на сегодня исчерпан (10/10). Попробуй завтра.');
-        return;
-      }
-
       convertBtn.disabled = true;
       spinner.classList.add('visible');
       btnText.textContent = 'Конвертация...';
@@ -497,14 +483,13 @@
         a.click();
         URL.revokeObjectURL(url);
 
-        // Update counter only on success
-        setUsed(getUsed() + 1);
-        renderCounter();
-
         progressFill.className = 'progress-fill';
         progressFill.style.width = '100%';
         progressLabel.textContent = 'Готово!';
         showAlert('success', `✓ Файл "${pdfName}" успешно конвертирован и загружен.`);
+
+        // Refresh real balance from CloudConvert
+        fetchBalance();
 
       } catch (err) {
         showAlert('error', err.message || 'Произошла ошибка при конвертации');
