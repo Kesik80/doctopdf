@@ -626,12 +626,17 @@ convertBtn.addEventListener('click', async () => {
     }
 
     progressLabel.textContent = 'Скачивание...';
+    // Get filename from server header if available
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const serverName = disposition.match(/filename="?([^"\n]+)"?/)?.[1];
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
 
     let outName;
-    if (currentMode === 'doc') {
+    if (serverName) {
+      outName = serverName;
+    } else if (currentMode === 'doc') {
       outName = selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.pdf';
     } else if (currentMode === 'img') {
       outName = selectedFiles.length > 1 ? 'images.pdf' : selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.pdf';
