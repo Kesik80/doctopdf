@@ -3,24 +3,52 @@ import fs from 'fs';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const config = { api: { bodyParser: false } };
+
+const BASE = 'https://api.cloudconvert.com/v2';
+
+async function ccFetch(path, opts = {}) {
+  const apiKey = process.env.CLOUDCONVERT_API_KEY;
+  return fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+async function waitForJob(jobId) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const res = await ccFetch(`/jobs/${jobId}`);
+    const { data } = await res.json();
+    if (data.status === 'finished') return data;
+    if (data.status === 'error') {
+      const errTask = data.tasks.find(t => t.status === 'error');
+      throw new Error(errTask?.message || 'Ошибка конвертации на CloudConvert');
+    }
+  }
+  throw new Error('Таймаут: конвертация заняла слишком много времени');
+}
+
+async function uploadFile(uploadTask, filePath, fileName) {
+  const { url, parameters } = uploadTask.result.form;
+  const form = new FormData();
+  for (const [k, v] of Object.entries(parameters)) form.append(k, v);
+  form.append('file', fs.createReadStream(filePath), fileName);
+  const res = await fetch(url, { method: 'POST', body: form });
+  if (!res.ok) throw new Error('Ошибка загрузки файла на CloudConvert');
+}
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.CLOUDCONVERT_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API ключ не настроен на сервере' });
-  }
+  if (!apiKey) return res.status(500).json({ error: 'API ключ не настроен' });
 
-  // Parse uploaded file
-  const form = formidable({ maxFileSize: 50 * 1024 * 1024 });
+  const form = formidable({ maxFileSize: 50 * 1024 * 1024, maxFiles: 20 });
   let fields, files;
   try {
     [fields, files] = await form.parse(req);
@@ -28,110 +56,155 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Ошибка чтения файла: ' + err.message });
   }
 
-  const file = Array.isArray(files.file) ? files.file[0] : files.file;
-  if (!file) {
-    return res.status(400).json({ error: 'Файл не найден' });
+  const mode = (Array.isArray(fields.mode) ? fields.mode[0] : fields.mode) || 'doc';
+  const count = parseInt((Array.isArray(fields.count) ? fields.count[0] : fields.count) || '1');
+
+  // Collect uploaded files in order
+  const uploadedFiles = [];
+  for (let i = 0; i < count; i++) {
+    const key = `file_${i}`;
+    const f = Array.isArray(files[key]) ? files[key][0] : files[key];
+    if (f) uploadedFiles.push(f);
   }
 
-  const originalName = file.originalFilename || 'document.docx';
-  const ext = originalName.split('.').pop().toLowerCase();
-  const allowed = ['doc', 'docx', 'odt', 'rtf'];
-  if (!allowed.includes(ext)) {
-    return res.status(400).json({ error: 'Поддерживаются только .doc, .docx, .odt, .rtf' });
-  }
-
-  const BASE = 'https://api.cloudconvert.com/v2';
-  const headers = {
-    'Authorization': `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  };
+  if (!uploadedFiles.length) return res.status(400).json({ error: 'Файлы не найдены' });
 
   try {
-    // 1. Create job
-    const jobRes = await fetch(`${BASE}/jobs`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    let jobDef;
+
+    if (mode === 'doc') {
+      // Single doc/docx → PDF
+      const file = uploadedFiles[0];
+      const ext = file.originalFilename.split('.').pop().toLowerCase();
+      jobDef = {
         tasks: {
-          'upload-file': {
-            operation: 'import/upload',
-          },
-          'convert-file': {
-            operation: 'convert',
-            input: 'upload-file',
-            input_format: ext,
-            output_format: 'pdf',
-            engine: 'libreoffice',
-          },
-          'export-file': {
-            operation: 'export/url',
-            input: 'convert-file',
-          },
-        },
-      }),
-    });
+          'upload': { operation: 'import/upload' },
+          'convert': { operation: 'convert', input: 'upload', input_format: ext, output_format: 'pdf', engine: 'libreoffice' },
+          'export': { operation: 'export/url', input: 'convert' },
+        }
+      };
 
-    const job = await jobRes.json();
-    if (!jobRes.ok) {
-      throw new Error(job.message || 'Ошибка создания задачи');
-    }
-
-    // 2. Upload file
-    const uploadTask = job.data.tasks.find(t => t.name === 'upload-file');
-    const uploadUrl = uploadTask.result.form.url;
-    const uploadParams = uploadTask.result.form.parameters;
-
-    const formData = new FormData();
-    for (const [key, val] of Object.entries(uploadParams)) {
-      formData.append(key, val);
-    }
-    formData.append('file', fs.createReadStream(file.filepath), originalName);
-
-    const uploadRes = await fetch(uploadUrl, { method: 'POST', body: formData });
-    if (!uploadRes.ok) {
-      throw new Error('Ошибка загрузки файла на CloudConvert');
-    }
-
-    // 3. Wait for job to finish (poll)
-    const jobId = job.data.id;
-    let resultUrl = null;
-    let pdfName = originalName.replace(/\.[^.]+$/, '') + '.pdf';
-
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const statusRes = await fetch(`${BASE}/jobs/${jobId}`, { headers });
-      const status = await statusRes.json();
-      const jobData = status.data;
-
-      if (jobData.status === 'finished') {
-        const exportTask = jobData.tasks.find(t => t.name === 'export-file');
-        resultUrl = exportTask.result.files[0].url;
-        pdfName = exportTask.result.files[0].filename || pdfName;
-        break;
+    } else if (mode === 'img') {
+      // One or more images → single PDF (merge)
+      const tasks = {};
+      const uploadNames = [];
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const name = `upload_${i}`;
+        tasks[name] = { operation: 'import/upload' };
+        uploadNames.push(name);
       }
+      if (uploadedFiles.length === 1) {
+        const ext = uploadedFiles[0].originalFilename.split('.').pop().toLowerCase();
+        tasks['convert'] = { operation: 'convert', input: uploadNames[0], input_format: ext, output_format: 'pdf' };
+        tasks['export'] = { operation: 'export/url', input: 'convert' };
+      } else {
+        // Convert each image to PDF, then merge
+        const convertNames = [];
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const ext = uploadedFiles[i].originalFilename.split('.').pop().toLowerCase();
+          const name = `convert_${i}`;
+          tasks[name] = { operation: 'convert', input: uploadNames[i], input_format: ext, output_format: 'pdf' };
+          convertNames.push(name);
+        }
+        tasks['merge'] = { operation: 'merge', input: convertNames, output_format: 'pdf' };
+        tasks['export'] = { operation: 'export/url', input: 'merge' };
+      }
+      jobDef = { tasks };
 
-      if (jobData.status === 'error') {
-        const errTask = jobData.tasks.find(t => t.status === 'error');
-        throw new Error(errTask?.message || 'Ошибка конвертации');
+    } else if (mode === 'pdf') {
+      // PDF → JPG (zip of pages)
+      jobDef = {
+        tasks: {
+          'upload': { operation: 'import/upload' },
+          'convert': { operation: 'convert', input: 'upload', input_format: 'pdf', output_format: 'jpg', engine: 'mupdf' },
+          'export': { operation: 'export/url', input: 'convert', archive_multiple_files: true },
+        }
+      };
+    } else if (mode === 'pdf2doc') {
+      // PDF → DOCX via LibreOffice
+      jobDef = {
+        tasks: {
+          'upload': { operation: 'import/upload' },
+          'convert': { operation: 'convert', input: 'upload', input_format: 'pdf', output_format: 'docx', engine: 'libreoffice' },
+          'export': { operation: 'export/url', input: 'convert' },
+        }
+      };
+    }
+
+    // Create job
+    const jobRes = await ccFetch('/jobs', { method: 'POST', body: JSON.stringify(jobDef) });
+    const jobData = await jobRes.json();
+    if (!jobRes.ok) throw new Error(jobData.message || 'Ошибка создания задачи');
+
+    const job = jobData.data;
+
+    // Upload files
+    if (mode === 'doc' || mode === 'pdf' || mode === 'pdf2doc') {
+      const uploadTask = job.tasks.find(t => t.name === 'upload');
+      await uploadFile(uploadTask, uploadedFiles[0].filepath, uploadedFiles[0].originalFilename);
+    } else {
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const uploadTask = job.tasks.find(t => t.name === `upload_${i}`);
+        await uploadFile(uploadTask, uploadedFiles[i].filepath, uploadedFiles[i].originalFilename);
       }
     }
 
-    if (!resultUrl) {
-      throw new Error('Таймаут: конвертация заняла слишком много времени');
-    }
+    // Wait for result
+    const finishedJob = await waitForJob(job.id);
+    const exportTask = finishedJob.tasks.find(t => t.name === 'export');
+    const resultFiles = exportTask.result.files;
 
-    // 4. Download PDF and stream to client
-    const pdfRes = await fetch(resultUrl);
-    if (!pdfRes.ok) {
-      throw new Error('Не удалось скачать PDF с CloudConvert');
-    }
+    if (resultFiles.length === 1) {
+      // Single file — stream directly
+      const pdfRes = await fetch(resultFiles[0].url);
+      if (!pdfRes.ok) throw new Error('Не удалось скачать результат');
+      const mime = mode === 'pdf' ? 'image/jpeg' : mode === 'pdf2doc' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf';
+      const fname = resultFiles[0].filename;
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+      pdfRes.body.pipe(res);
+    } else {
+      // Multiple files (PDF pages) — download as ZIP via CloudConvert archive
+      // Re-export as archive
+      const archiveRes = await ccFetch('/jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          tasks: {
+            'import-result': { operation: 'import/url', url: resultFiles[0].url },
+            'archive': { operation: 'archive', input: resultFiles.map((_, i) => `import-${i}`), output_format: 'zip' },
+            'export-zip': { operation: 'export/url', input: 'archive' },
+          }
+        })
+      });
+      // Simpler: just redirect to first file or stream a zip manually
+      // For now stream first file and note the rest
+      const pdfRes = await fetch(resultFiles[0].url);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="pages.zip"`);
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${pdfName}"`);
-    pdfRes.body.pipe(res);
+      // Use CloudConvert's built-in zip export
+      const zipJobRes = await ccFetch('/jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          tasks: {
+            ...Object.fromEntries(resultFiles.map((f, i) => [`import_${i}`, { operation: 'import/url', url: f.url, filename: f.filename }])),
+            'archive': { operation: 'archive', input: resultFiles.map((_, i) => `import_${i}`), output_format: 'zip' },
+            'export': { operation: 'export/url', input: 'archive' },
+          }
+        })
+      });
+      const zipJob = await zipJobRes.json();
+      const finishedZip = await waitForJob(zipJob.data.id);
+      const zipExport = finishedZip.tasks.find(t => t.name === 'export');
+      const zipUrl = zipExport.result.files[0].url;
+      const zipRes = await fetch(zipUrl);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="pages.zip"');
+      zipRes.body.pipe(res);
+    }
 
   } catch (err) {
-    console.error('CloudConvert error:', err);
-    res.status(500).json({ error: err.message || 'Внутренняя ошибка сервера' });
+    console.error('Convert error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 }
