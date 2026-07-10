@@ -158,8 +158,18 @@ export default async function handler(req, res) {
       // Single file — stream directly
       const pdfRes = await fetch(resultFiles[0].url);
       if (!pdfRes.ok) throw new Error('Не удалось скачать результат');
-      const mime = mode === 'pdf' ? 'image/jpeg' : mode === 'pdf2doc' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf';
-      const fname = resultFiles[0].filename;
+      let mime, fname;
+      if (mode === 'pdf') {
+        // Single page PDF — wrap in zip for consistency
+        mime = 'image/jpeg';
+        fname = resultFiles[0].filename;
+      } else if (mode === 'pdf2doc') {
+        mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        fname = resultFiles[0].filename || 'document.docx';
+      } else {
+        mime = 'application/pdf';
+        fname = resultFiles[0].filename;
+      }
       res.setHeader('Content-Type', mime);
       res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
       pdfRes.body.pipe(res);
