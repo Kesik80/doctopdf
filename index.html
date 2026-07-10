@@ -3,635 +3,680 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-
-<!-- PWA -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="doc2pdf">
-
-<!-- === MIUI/HyperOS + Android: принудительная тёмная навигация === -->
 <meta name="theme-color" content="#0d0f14">
-<!-- Android Chrome: edge-to-edge + тёмная навигация -->
-<meta name="android-app" content="app-id=doc2pdf.vercel.app">
-<!-- Принудительно тёмный цвет для системных панелей -->
 <meta name="msapplication-navbutton-color" content="#0d0f14">
 <meta name="msapplication-TileColor" content="#0d0f14">
-
 <link rel="manifest" href="/icons/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 <link rel="icon" href="/icons/favicon.ico" sizes="32x32">
+<title>DocToPDF</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  color-scheme: dark;
+  --bg: #0d0f14;
+  --surface: #161a24;
+  --surface2: #1e2433;
+  --border: #2a3148;
+  --accent: #4f8ef7;
+  --accent2: #7c5ef7;
+  --success: #34d399;
+  --error: #f87171;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --radius: 16px;
+}
+html { background: var(--bg); }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(24px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  scrollbar-color: var(--surface2) var(--bg);
+}
+body::after {
+  content: '';
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 120px;
+  background: var(--bg);
+  z-index: 9999;
+  pointer-events: none;
+  mask: linear-gradient(to top, black 60%, transparent 100%);
+  -webkit-mask: linear-gradient(to top, black 60%, transparent 100%);
+}
+.system-nav-overlay {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: env(safe-area-inset-bottom, 48px);
+  min-height: 48px;
+  background: rgba(13,15,20,.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 9998;
+  pointer-events: none;
+  border-top: 1px solid rgba(42,49,72,.5);
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 10%, rgba(79,142,247,.12) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 80% 90%, rgba(124,94,247,.10) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+.container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 680px;
+  padding-bottom: 20px;
+}
+header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding-top: 16px;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.logo-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 24px rgba(79,142,247,.35);
+}
+.logo-text {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+header p { color: var(--muted); font-size: 14px; }
+.counter-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.counter-bar-bg {
+  width: 100px;
+  height: 5px;
+  background: var(--surface2);
+  border-radius: 99px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.counter-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .4s ease, background .4s ease;
+  width: 0%;
+}
+.counter-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.counter-label strong { color: var(--text); font-weight: 600; }
 
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* === MODE TABS === */
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+}
+.mode-tab {
+  flex: 1;
+  padding: 8px 6px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+  line-height: 1.3;
+}
+.mode-tab .tab-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+.mode-tab { font-size: 11px; }
+.mode-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(79,142,247,.3);
+}
 
-    :root {
-      color-scheme: dark;
-      --bg: #0d0f14;
-      --surface: #161a24;
-      --surface2: #1e2433;
-      --border: #2a3148;
-      --accent: #4f8ef7;
-      --accent2: #7c5ef7;
-      --success: #34d399;
-      --error: #f87171;
-      --text: #e2e8f0;
-      --muted: #64748b;
-      --radius: 16px;
-    }
+/* === CARD === */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
 
-    html {
-      background: var(--bg);
-    }
+/* === DROPZONE === */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s ease;
+  position: relative;
+  background: var(--surface2);
+}
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(79,142,247,.06);
+}
+.dropzone.drag-over { transform: scale(1.01); }
+.dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.dz-icon { font-size: 40px; margin-bottom: 10px; display: block; line-height: 1; }
+.dz-title { font-size: 16px; font-weight: 600; margin-bottom: 5px; }
+.dz-sub { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.dz-sub span { color: var(--accent); font-weight: 500; }
 
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      /* === Увеличенный нижний отступ для MIUI === */
-      padding: calc(24px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));
-      padding-left: calc(16px + env(safe-area-inset-left));
-      padding-right: calc(16px + env(safe-area-inset-right));
-      background-color: var(--bg);
-      /* === Принудительно тёмный скроллбар === */
-      scrollbar-color: var(--surface2) var(--bg);
-    }
+/* === FILE LIST (multiple files) === */
+.file-list {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.file-list.visible { display: flex; }
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.file-item-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.file-item-icon.doc  { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.file-item-icon.img  { background: linear-gradient(135deg, #10b981, #059669); }
+.file-item-icon.pdf  { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.file-item-info { flex: 1; min-width: 0; }
+.file-item-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-item-size { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.file-item-remove {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 16px; padding: 4px; border-radius: 6px;
+  transition: color .15s, background .15s; flex-shrink: 0;
+}
+.file-item-remove:hover { color: var(--error); background: rgba(248,113,113,.1); }
 
-    /* === ПОЛНОЭКРАННЫЙ ОВЕРЛЕЙ: закрашиваем ВСЁ пространство под системной панелью === */
-    body::after {
-      content: '';
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      /* Закрашиваем большую область на случай, если системная панель выше стандартной */
-      height: 120px;
-      background: var(--bg);
-      z-index: 9999;
-      pointer-events: none;
-      /* Градиент для плавного перехода */
-      mask: linear-gradient(to top, black 60%, transparent 100%);
-      -webkit-mask: linear-gradient(to top, black 60%, transparent 100%);
-    }
+/* === ORDER HINT (images only) === */
+.order-hint {
+  display: none;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: rgba(79,142,247,.06);
+  border-radius: 8px;
+  border: 1px solid rgba(79,142,247,.15);
+}
+.order-hint.visible { display: block; }
 
-    /* === Дополнительный слой для MIUI: затемняем системную панель === */
-    .system-nav-overlay {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: env(safe-area-inset-bottom, 48px);
-      min-height: 48px;
-      background: rgba(13, 15, 20, 0.95);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      z-index: 9998;
-      pointer-events: none;
-      border-top: 1px solid rgba(42, 49, 72, 0.5);
-    }
+/* === BUTTON === */
+.btn-convert {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 15px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s, transform .15s, box-shadow .2s;
+  box-shadow: 0 4px 20px rgba(79,142,247,.3);
+}
+.btn-convert:hover:not(:disabled) {
+  opacity: .92; transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(79,142,247,.4);
+}
+.btn-convert:active:not(:disabled) { transform: translateY(0); }
+.btn-convert:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 60% 40% at 20% 10%, rgba(79,142,247,.12) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 35% at 80% 90%, rgba(124,94,247,.10) 0%, transparent 60%);
-      pointer-events: none;
-      z-index: 0;
-    }
+/* === PROGRESS === */
+.progress-wrap { display: none; margin-top: 16px; }
+.progress-wrap.visible { display: block; }
+.progress-label { font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+.progress-bar { height: 5px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 99px;
+  transition: width .4s ease;
+  width: 0%;
+}
+.progress-fill.indeterminate {
+  width: 45% !important;
+  animation: indeterminate 1.4s ease infinite;
+}
+@keyframes indeterminate {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(350%); }
+}
 
-    .container {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      max-width: 680px;
-      /* Убедимся, что контент не уходит под оверлей */
-      padding-bottom: 20px;
-    }
+/* === ALERT === */
+.alert {
+  display: none;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 14px;
+}
+.alert.visible { display: flex; }
+.alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert.success { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25); color: #34d399; }
+.alert.error   { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.25); color: #f87171; }
 
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-      padding-top: 16px;
-    }
-
-    .logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-
-    .logo-icon {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 24px rgba(79,142,247,.35);
-    }
-
-    .logo-text {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    header p {
-      color: var(--muted);
-      font-size: 15px;
-    }
-
-    .counter-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .counter-bar-bg {
-      width: 120px;
-      height: 6px;
-      background: var(--surface2);
-      border-radius: 99px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-
-    .counter-bar-fill {
-      height: 100%;
-      border-radius: 99px;
-      transition: width .4s ease, background .4s ease;
-      width: 0%;
-    }
-
-    .counter-label {
-      font-size: 13px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .counter-label strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      margin-bottom: 20px;
-    }
-
-    .dropzone {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      padding: 48px 24px;
-      text-align: center;
-      cursor: pointer;
-      transition: all .2s ease;
-      position: relative;
-      background: var(--surface2);
-    }
-
-    .dropzone:hover,
-    .dropzone.drag-over {
-      border-color: var(--accent);
-      background: rgba(79,142,247,.06);
-    }
-
-    .dropzone.drag-over { transform: scale(1.01); }
-
-    .dropzone input[type="file"] {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-      width: 100%;
-      height: 100%;
-    }
-
-    .dz-icon { font-size: 48px; margin-bottom: 12px; display: block; line-height: 1; }
-    .dz-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
-    .dz-sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
-    .dz-sub span { color: var(--accent); font-weight: 500; }
-
-    .file-preview {
-      display: none;
-      align-items: center;
-      gap: 14px;
-      padding: 16px 20px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      margin-top: 16px;
-    }
-    .file-preview.visible { display: flex; }
-
-    .file-icon {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px; flex-shrink: 0;
-    }
-
-    .file-info { flex: 1; min-width: 0; }
-    .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .file-size { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-    .file-remove {
-      background: none; border: none; cursor: pointer;
-      color: var(--muted); font-size: 20px; padding: 4px; border-radius: 6px;
-      transition: color .15s, background .15s;
-    }
-    .file-remove:hover { color: var(--error); background: rgba(248,113,113,.1); }
-
-    .btn-convert {
-      display: flex; align-items: center; justify-content: center;
-      gap: 10px;
-      width: 100%;
-      margin-top: 20px;
-      padding: 16px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity .2s, transform .15s, box-shadow .2s;
-      box-shadow: 0 4px 20px rgba(79,142,247,.3);
-      letter-spacing: 0.2px;
-    }
-
-    .btn-convert:hover:not(:disabled) {
-      opacity: .92;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 28px rgba(79,142,247,.4);
-    }
-    .btn-convert:active:not(:disabled) { transform: translateY(0); }
-    .btn-convert:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-
-    .progress-wrap { display: none; margin-top: 20px; }
-    .progress-wrap.visible { display: block; }
-
-    .progress-label {
-      font-size: 13px; color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .progress-bar {
-      height: 6px;
-      background: var(--surface2);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      border-radius: 99px;
-      transition: width .4s ease;
-      width: 0%;
-    }
-
-    .progress-fill.indeterminate {
-      width: 45% !important;
-      animation: indeterminate 1.4s ease infinite;
-    }
-
-    @keyframes indeterminate {
-      0%   { transform: translateX(-150%); }
-      100% { transform: translateX(350%); }
-    }
-
-    .alert {
-      display: none;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 14px 18px;
-      border-radius: 10px;
-      font-size: 14px;
-      line-height: 1.5;
-      margin-top: 16px;
-    }
-    .alert.visible { display: flex; }
-    .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-    .alert.success { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25); color: #34d399; }
-    .alert.error   { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.25); color: #f87171; }
-
-    footer {
-      margin-top: 8px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 12px;
-      padding-bottom: env(safe-area-inset-bottom, 0px);
-      /* Дополнительный отступ для MIUI */
-      margin-bottom: 16px;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      width: 18px; height: 18px;
-      border: 2px solid rgba(255,255,255,.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      display: none;
-    }
-    .spinner.visible { display: block; }
-
-    @media (max-width: 540px) {
-      .card { padding: 20px 16px; }
-      .dropzone { padding: 36px 16px; }
-      .btn-convert { font-size: 15px; padding: 14px; }
-    }
-  </style>
+footer {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  margin-bottom: 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  display: none;
+}
+.spinner.visible { display: block; }
+@media (max-width: 540px) {
+  .card { padding: 16px 14px; }
+  .dropzone { padding: 32px 16px; }
+}
+</style>
 </head>
 <body>
-  <!-- === Оверлей для системной навигации MIUI === -->
-  <div class="system-nav-overlay" id="navOverlay"></div>
-
-  <div class="container">
-    <header>
-      <div class="logo">
-        <div class="logo-icon">📄</div>
-        <span class="logo-text">DocToPDF</span>
+<div class="system-nav-overlay"></div>
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📄</div>
+      <span class="logo-text">DocToPDF</span>
+    </div>
+    <p>Конвертация документов и изображений</p>
+    <div class="counter-wrap">
+      <div class="counter-bar-bg">
+        <div class="counter-bar-fill" id="counterFill"></div>
       </div>
-      <p>Конвертация Word документов в PDF</p>
+      <span class="counter-label">Осталось сегодня: <strong id="counterNum">…</strong> из 10</span>
+    </div>
+  </header>
 
-      <div class="counter-wrap">
-        <div class="counter-bar-bg">
-          <div class="counter-bar-fill" id="counterFill"></div>
-        </div>
-        <span class="counter-label">Осталось сегодня: <strong id="counterNum">…</strong> из 10</span>
-      </div>
-    </header>
+  <!-- MODE TABS -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="doc">
+      <span class="tab-icon">📝</span>DOC → PDF
+    </button>
+    <button class="mode-tab" data-mode="img">
+      <span class="tab-icon">🖼️</span>IMG → PDF
+    </button>
+    <button class="mode-tab" data-mode="pdf">
+      <span class="tab-icon">📑</span>PDF → IMG
+    </button>
+    <button class="mode-tab" data-mode="pdf2doc">
+      <span class="tab-icon">📃</span>PDF → DOC
+    </button>
+  </div>
 
-    <div class="card">
-      <div class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept=".doc,.docx,.odt,.rtf" />
-        <span class="dz-icon">⬆️</span>
-        <div class="dz-title">Перетащите файл или нажмите для выбора</div>
-        <div class="dz-sub">
-          <span>.doc, .docx, .odt, .rtf</span> · до 50 МБ
-        </div>
-      </div>
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".doc,.docx,.odt,.rtf" />
+      <span class="dz-icon">⬆️</span>
+      <div class="dz-title" id="dzTitle">Перетащите файл или нажмите для выбора</div>
+      <div class="dz-sub" id="dzSub"><span>.doc, .docx, .odt, .rtf</span> · до 50 МБ</div>
+    </div>
 
-      <div class="file-preview" id="filePreview">
-        <div class="file-icon">📝</div>
-        <div class="file-info">
-          <div class="file-name" id="fileName">—</div>
-          <div class="file-size" id="fileSize">—</div>
-        </div>
-        <button class="file-remove" id="removeFile" title="Убрать файл">✕</button>
-      </div>
+    <div class="file-list" id="fileList"></div>
+    <div class="order-hint" id="orderHint">Файлы объединятся в PDF в порядке выбора</div>
 
-      <button class="btn-convert" id="convertBtn" disabled>
-        <div class="spinner" id="spinner"></div>
-        <span id="btnText">Выберите файл для конвертации</span>
-      </button>
+    <button class="btn-convert" id="convertBtn" disabled>
+      <div class="spinner" id="spinner"></div>
+      <span id="btnText">Выберите файл</span>
+    </button>
 
-      <div class="progress-wrap" id="progressWrap">
-        <div class="progress-label" id="progressLabel">Конвертация...</div>
-        <div class="progress-bar">
-          <div class="progress-fill indeterminate" id="progressFill"></div>
-        </div>
-      </div>
-
-      <div class="alert" id="alertBox">
-        <span class="alert-icon" id="alertIcon"></span>
-        <span id="alertText"></span>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label" id="progressLabel">Конвертация...</div>
+      <div class="progress-bar">
+        <div class="progress-fill indeterminate" id="progressFill"></div>
       </div>
     </div>
 
-    <footer>Конвертация через CloudConvert · LibreOffice engine</footer>
+    <div class="alert" id="alertBox">
+      <span class="alert-icon" id="alertIcon"></span>
+      <span id="alertText"></span>
+    </div>
   </div>
 
-  <script>
-    // === MIUI/HyperOS: принудительно скрываем системную навигацию ===
-    function hideSystemNav() {
-      // Пробуем Web App API для полноэкранного режима
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-      
-      // Для Android: пробуем immersive mode
-      if (window.AndroidFullScreen) {
-        window.AndroidFullScreen.immersiveMode();
-      }
-      
-      // Скрываем оверлей, если системная панель уже скрыта
-      const navOverlay = document.getElementById('navOverlay');
-      if (navOverlay) {
-        // Проверяем, есть ли системная панель
-        const hasNav = window.innerHeight < screen.height;
-        if (!hasNav) {
-          navOverlay.style.display = 'none';
-        }
-      }
-    }
+  <footer>CloudConvert · LibreOffice engine · 10 конвертаций в день</footer>
+</div>
 
-    // Вызываем при загрузке
-    window.addEventListener('load', hideSystemNav);
-    
-    // Также при изменении ориентации
-    window.addEventListener('resize', () => {
-      setTimeout(hideSystemNav, 100);
+<script>
+// === BALANCE ===
+const counterNum  = document.getElementById('counterNum');
+const counterFill = document.getElementById('counterFill');
+
+async function fetchBalance() {
+  try {
+    const res = await fetch('/api/balance');
+    const data = await res.json();
+    if (data.credits != null) renderCounter(data.credits);
+    else counterNum.textContent = '?';
+  } catch { counterNum.textContent = '?'; }
+}
+
+function renderCounter(n) {
+  n = Math.max(0, n);
+  counterNum.textContent = n;
+  const pct = Math.min(100, (n / 10) * 100);
+  counterFill.style.width = pct + '%';
+  counterFill.style.background = n > 3
+    ? 'linear-gradient(90deg, #4f8ef7, #7c5ef7)'
+    : n > 0 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : '#ef4444';
+}
+fetchBalance();
+
+// === MODE ===
+let currentMode = 'doc'; // doc | img | pdf
+let selectedFiles = []; // array of File
+
+const modes = {
+  doc: {
+    accept: '.doc,.docx,.odt,.rtf',
+    multiple: false,
+    title: 'Перетащите файл или нажмите для выбора',
+    sub: '<span>.doc, .docx, .odt, .rtf</span> · до 50 МБ',
+    btnLabel: 'Конвертировать в PDF',
+    allowed: ['doc','docx','odt','rtf'],
+    icon: type => '📝',
+    iconClass: 'doc',
+  },
+  img: {
+    accept: '.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff',
+    multiple: true,
+    title: 'Выберите изображения (можно несколько)',
+    sub: '<span>.jpg, .png, .webp и другие</span> · до 50 МБ каждый',
+    btnLabel: 'Объединить в PDF',
+    allowed: ['jpg','jpeg','png','webp','gif','bmp','tiff','tif'],
+    icon: type => '🖼️',
+    iconClass: 'img',
+  },
+  pdf: {
+    accept: '.pdf',
+    multiple: false,
+    title: 'Перетащите PDF файл',
+    sub: '<span>.pdf</span> · до 50 МБ',
+    btnLabel: 'Конвертировать в JPG',
+    allowed: ['pdf'],
+    icon: type => '📑',
+    iconClass: 'pdf',
+  },
+  pdf2doc: {
+    accept: '.pdf',
+    multiple: false,
+    title: 'Перетащите PDF файл',
+    sub: '<span>.pdf</span> · до 50 МБ',
+    btnLabel: 'Конвертировать в DOCX',
+    allowed: ['pdf'],
+    icon: type => '📃',
+    iconClass: 'pdf',
+  },
+};
+
+// DOM
+const dropzone    = document.getElementById('dropzone');
+const fileInput   = document.getElementById('fileInput');
+const fileList    = document.getElementById('fileList');
+const orderHint   = document.getElementById('orderHint');
+const convertBtn  = document.getElementById('convertBtn');
+const btnText     = document.getElementById('btnText');
+const spinner     = document.getElementById('spinner');
+const progressWrap  = document.getElementById('progressWrap');
+const progressFill  = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const alertBox    = document.getElementById('alertBox');
+const alertIcon   = document.getElementById('alertIcon');
+const alertText   = document.getElementById('alertText');
+const dzTitle     = document.getElementById('dzTitle');
+const dzSub       = document.getElementById('dzSub');
+
+function showAlert(type, msg) {
+  alertBox.className = 'alert visible ' + type;
+  alertIcon.textContent = type === 'success' ? '✅' : '❌';
+  alertText.textContent = msg;
+}
+function hideAlert() { alertBox.className = 'alert'; }
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' Б';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' КБ';
+  return (b / 1048576).toFixed(2) + ' МБ';
+}
+
+function renderFileList() {
+  const m = modes[currentMode];
+  fileList.innerHTML = '';
+  if (selectedFiles.length === 0) {
+    fileList.classList.remove('visible');
+    orderHint.classList.remove('visible');
+    convertBtn.disabled = true;
+    btnText.textContent = 'Выберите файл';
+    return;
+  }
+  fileList.classList.add('visible');
+  orderHint.classList.toggle('visible', currentMode === 'img' && selectedFiles.length > 1);
+
+  selectedFiles.forEach((file, idx) => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    const num = currentMode === 'img' && selectedFiles.length > 1
+      ? `<span style="font-size:10px;color:var(--muted);margin-right:2px">${idx+1}.</span>` : '';
+    item.innerHTML = `
+      <div class="file-item-icon ${m.iconClass}">${m.icon()}</div>
+      <div class="file-item-info">
+        <div class="file-item-name">${num}${file.name}</div>
+        <div class="file-item-size">${formatBytes(file.size)}</div>
+      </div>
+      <button class="file-item-remove" data-idx="${idx}">✕</button>
+    `;
+    fileList.appendChild(item);
+  });
+
+  fileList.querySelectorAll('.file-item-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedFiles.splice(parseInt(btn.dataset.idx), 1);
+      renderFileList();
     });
+  });
 
-    // === Остальной JavaScript без изменений ===
-    const counterNum  = document.getElementById('counterNum');
-    const counterFill = document.getElementById('counterFill');
+  convertBtn.disabled = false;
+  btnText.textContent = currentMode === 'img' && selectedFiles.length > 1
+    ? `Объединить ${selectedFiles.length} фото в PDF`
+    : m.btnLabel;
+}
 
-    async function fetchBalance() {
-      try {
-        const res = await fetch('/api/balance');
-        const data = await res.json();
-        if (data.credits != null) renderCounter(data.credits);
-        else counterNum.textContent = '?';
-      } catch {
-        counterNum.textContent = '?';
-      }
+function addFiles(newFiles) {
+  const m = modes[currentMode];
+  hideAlert();
+  for (const file of newFiles) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!m.allowed.includes(ext)) {
+      showAlert('error', `Файл "${file.name}" — неподдерживаемый формат`);
+      continue;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      showAlert('error', `Файл "${file.name}" слишком большой (макс. 50 МБ)`);
+      continue;
+    }
+    if (!m.multiple) selectedFiles = [file];
+    else selectedFiles.push(file);
+  }
+  renderFileList();
+}
+
+function applyMode(mode) {
+  currentMode = mode;
+  selectedFiles = [];
+  hideAlert();
+  progressWrap.classList.remove('visible');
+  const m = modes[mode];
+  fileInput.accept = m.accept;
+  fileInput.multiple = m.multiple;
+  dzTitle.textContent = m.title;
+  dzSub.innerHTML = m.sub;
+  renderFileList();
+  document.querySelectorAll('.mode-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mode === mode);
+  });
+}
+
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => applyMode(tab.dataset.mode));
+});
+
+// Drag & drop
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) addFiles(Array.from(fileInput.files));
+  fileInput.value = '';
+});
+
+// === CONVERT ===
+convertBtn.addEventListener('click', async () => {
+  if (!selectedFiles.length) return;
+
+  convertBtn.disabled = true;
+  spinner.classList.add('visible');
+  btnText.textContent = 'Конвертация...';
+  progressWrap.classList.add('visible');
+  progressFill.className = 'progress-fill indeterminate';
+  progressLabel.textContent = 'Отправка на CloudConvert...';
+  hideAlert();
+
+  const formData = new FormData();
+  formData.append('mode', currentMode);
+  selectedFiles.forEach((f, i) => formData.append(`file_${i}`, f));
+  formData.append('count', selectedFiles.length);
+
+  try {
+    const res = await fetch('/api/convert', { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Ошибка сервера: ${res.status}`);
     }
 
-    function renderCounter(credits) {
-      const n = Math.max(0, credits);
-      counterNum.textContent = n;
-      const pct = Math.min(100, (n / 10) * 100);
-      counterFill.style.width = pct + '%';
-      counterFill.style.background = n > 3
-        ? 'linear-gradient(90deg, #4f8ef7, #7c5ef7)'
-        : n > 0
-          ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
-          : '#ef4444';
+    progressLabel.textContent = 'Скачивание...';
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    let outName;
+    if (currentMode === 'doc') {
+      outName = selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.pdf';
+    } else if (currentMode === 'img') {
+      outName = selectedFiles.length > 1 ? 'images.pdf' : selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.pdf';
+    } else if (currentMode === 'pdf2doc') {
+      outName = selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.docx';
+    } else {
+      outName = selectedFiles[0].name.replace(/\.[^.]+$/, '') + '.zip';
     }
 
+    a.href = url;
+    a.download = outName;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    progressFill.className = 'progress-fill';
+    progressFill.style.width = '100%';
+    progressLabel.textContent = 'Готово!';
+    showAlert('success', `✓ "${outName}" готов и загружен.`);
     fetchBalance();
 
-    const dropzone      = document.getElementById('dropzone');
-    const fileInput     = document.getElementById('fileInput');
-    const filePreview   = document.getElementById('filePreview');
-    const fileName      = document.getElementById('fileName');
-    const fileSize      = document.getElementById('fileSize');
-    const removeFile    = document.getElementById('removeFile');
-    const convertBtn    = document.getElementById('convertBtn');
-    const btnText       = document.getElementById('btnText');
-    const spinner       = document.getElementById('spinner');
-    const progressWrap  = document.getElementById('progressWrap');
-    const progressFill  = document.getElementById('progressFill');
-    const progressLabel = document.getElementById('progressLabel');
-    const alertBox      = document.getElementById('alertBox');
-    const alertIcon     = document.getElementById('alertIcon');
-    const alertText     = document.getElementById('alertText');
-
-    let selectedFile = null;
-
-    function formatBytes(b) {
-      if (b < 1024) return b + ' Б';
-      if (b < 1048576) return (b / 1024).toFixed(1) + ' КБ';
-      return (b / 1048576).toFixed(2) + ' МБ';
-    }
-
-    function showAlert(type, msg) {
-      alertBox.className = 'alert visible ' + type;
-      alertIcon.textContent = type === 'success' ? '✅' : '❌';
-      alertText.textContent = msg;
-    }
-
-    function hideAlert() { alertBox.className = 'alert'; }
-
-    function setFile(file) {
-      if (!file) return;
-      const ext = file.name.split('.').pop().toLowerCase();
-      if (!['doc','docx','odt','rtf'].includes(ext)) {
-        showAlert('error', 'Поддерживаются только .doc, .docx, .odt, .rtf');
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        showAlert('error', 'Файл слишком большой. Максимум — 50 МБ.');
-        return;
-      }
-      selectedFile = file;
-      hideAlert();
-      fileName.textContent = file.name;
-      fileSize.textContent = formatBytes(file.size);
-      filePreview.classList.add('visible');
-      convertBtn.disabled = false;
-      btnText.textContent = 'Конвертировать в PDF';
-    }
-
-    function clearFile() {
-      selectedFile = null;
-      fileInput.value = '';
-      filePreview.classList.remove('visible');
-      convertBtn.disabled = true;
-      btnText.textContent = 'Выберите файл для конвертации';
-      progressWrap.classList.remove('visible');
-      hideAlert();
-    }
-
-    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
-    dropzone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropzone.classList.remove('drag-over');
-      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
-    removeFile.addEventListener('click', clearFile);
-
-    convertBtn.addEventListener('click', async () => {
-      if (!selectedFile) return;
-
-      convertBtn.disabled = true;
-      spinner.classList.add('visible');
-      btnText.textContent = 'Конвертация...';
-      progressWrap.classList.add('visible');
-      progressFill.className = 'progress-fill indeterminate';
-      progressLabel.textContent = 'Загрузка и конвертация через CloudConvert...';
-      hideAlert();
-
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-
-      try {
-        const res = await fetch('/api/convert', { method: 'POST', body: formData });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Ошибка сервера: ${res.status}`);
-        }
-
-        progressLabel.textContent = 'Скачивание PDF...';
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const pdfName = selectedFile.name.replace(/\.[^.]+$/, '') + '.pdf';
-        a.href = url;
-        a.download = pdfName;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        progressFill.className = 'progress-fill';
-        progressFill.style.width = '100%';
-        progressLabel.textContent = 'Готово!';
-        showAlert('success', `✓ Файл "${pdfName}" успешно конвертирован и загружен.`);
-
-        fetchBalance();
-
-      } catch (err) {
-        showAlert('error', err.message || 'Произошла ошибка при конвертации');
-        progressWrap.classList.remove('visible');
-      } finally {
-        convertBtn.disabled = false;
-        spinner.classList.remove('visible');
-        btnText.textContent = 'Конвертировать ещё раз';
-      }
-    });
-  </script>
-  <script>
-// PWA install banner (без изменений)
+  } catch (err) {
+    showAlert('error', err.message || 'Ошибка при конвертации');
+    progressWrap.classList.remove('visible');
+  } finally {
+    convertBtn.disabled = false;
+    spinner.classList.remove('visible');
+    btnText.textContent = selectedFiles.length > 1
+      ? `Конвертировать ещё раз (${selectedFiles.length} файла)`
+      : 'Конвертировать ещё раз';
+  }
+});
+</script>
+<script>
+// PWA install banner
 const _dismissed = localStorage.getItem('pwa-install-dismissed');
-if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
-} else {
+if (!(_dismissed && Date.now() - parseInt(_dismissed) < 7*24*60*60*1000)) {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isInStandalone = window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone === true;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   let deferredPrompt = null;
-
-  if (!isInStandalone) {
-    function createBanner(btnLabel, onBtnClick) {
+  if (!isStandalone) {
+    function createBanner(label, onClick) {
       const b = document.createElement('div');
       b.id = 'pwa-install-banner';
-      b.style.cssText = 'position:fixed;bottom:20px;left:12px;right:12px;'
-        + 'background:#0a0a0f;color:#fff;border-radius:18px;'
-        + 'padding:14px 16px;display:flex;align-items:center;gap:12px;'
-        + 'box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9000;'
-        + 'font-family:sans-serif;animation:pwaSlideUp .4s cubic-bezier(.32,1,.23,1);';
-      b.innerHTML = `
-        <span style="font-size:28px;flex-shrink:0">📲</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600">doc2pdf</div>
-          <div style="font-size:12px;opacity:.7;margin-top:2px">Добавить на экран</div>
-        </div>
-        <button id="pwa-action-btn" style="flex-shrink:0;padding:8px 16px;background:#fff;
-          color:#0a0a0f;border:none;border-radius:12px;font-size:13px;
-          font-weight:700;cursor:pointer">${btnLabel}</button>
-        <button id="pwa-close-btn" style="flex-shrink:0;background:none;border:none;
-          color:#fff;font-size:18px;cursor:pointer;opacity:.65;padding:2px 4px">✕</button>
-      `;
+      b.style.cssText = 'position:fixed;bottom:20px;left:12px;right:12px;background:#0d0f14;color:#fff;border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9000;font-family:sans-serif;animation:pwaSlideUp .4s cubic-bezier(.32,1,.23,1);border:1px solid rgba(79,142,247,.2)';
+      b.innerHTML = `<span style="font-size:26px;flex-shrink:0">📲</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">DocToPDF</div><div style="font-size:12px;opacity:.7;margin-top:2px">Добавить на экран</div></div><button id="pwa-action-btn" style="flex-shrink:0;padding:8px 14px;background:linear-gradient(135deg,#4f8ef7,#7c5ef7);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">${label}</button><button id="pwa-close-btn" style="flex-shrink:0;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;opacity:.5;padding:2px 6px">✕</button>`;
       if (!document.getElementById('pwa-style')) {
         const s = document.createElement('style');
         s.id = 'pwa-style';
@@ -639,83 +684,32 @@ if (_dismissed && Date.now() - parseInt(_dismissed) < 7 * 24 * 60 * 60 * 1000) {
         document.head.appendChild(s);
       }
       document.body.appendChild(b);
-      document.getElementById('pwa-action-btn').onclick = onBtnClick;
-      document.getElementById('pwa-close-btn').onclick = () => {
-        b.remove();
-        localStorage.setItem('pwa-install-dismissed', Date.now());
-      };
+      document.getElementById('pwa-action-btn').onclick = onClick;
+      document.getElementById('pwa-close-btn').onclick = () => { b.remove(); localStorage.setItem('pwa-install-dismissed', Date.now()); };
     }
-
     if (isIOS) {
-      const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
-      if (isSafari) {
-        setTimeout(() => {
-          createBanner('Как?', () => showIOSGuide());
-        }, 2000);
+      if (/safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent)) {
+        setTimeout(() => createBanner('Как?', showIOSGuide), 2000);
       }
     } else {
       window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        deferredPrompt = e;
-        setTimeout(() => {
-          createBanner('Установить', async () => {
-            if (!deferredPrompt) return;
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            deferredPrompt = null;
-            document.getElementById('pwa-install-banner')?.remove();
-          });
-        }, 1500);
+        e.preventDefault(); deferredPrompt = e;
+        setTimeout(() => createBanner('Установить', async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          document.getElementById('pwa-install-banner')?.remove();
+        }), 1500);
       });
-      window.addEventListener('appinstalled', () => {
-        document.getElementById('pwa-install-banner')?.remove();
-      });
+      window.addEventListener('appinstalled', () => document.getElementById('pwa-install-banner')?.remove());
     }
   }
 }
-
 function showIOSGuide() {
   const ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;'
-    + 'background:rgba(0,0,0,.8);display:flex;align-items:flex-end;padding:12px;';
-  ov.innerHTML = `
-    <div style="background:#1c1c1e;border-radius:22px;padding:24px;width:100%;
-      border:1px solid rgba(255,255,255,.12)">
-      <div style="font-size:17px;font-weight:700;margin-bottom:20px;
-        text-align:center;color:#fff">Установка на iPhone</div>
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div style="display:flex;align-items:center;gap:14px">
-          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
-            display:flex;align-items:center;justify-content:center;
-            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">1</div>
-          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
-            Нажми кнопку <strong style="color:#fff">«Поделиться»</strong>
-            <span style="font-size:18px"> ⎙ </span> внизу Safari
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:14px">
-          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
-            display:flex;align-items:center;justify-content:center;
-            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">2</div>
-          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
-            Выбери <strong style="color:#fff">«На экран «Домой»»</strong>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:14px">
-          <div style="width:36px;height:36px;background:#0a0a0f;border-radius:10px;
-            display:flex;align-items:center;justify-content:center;
-            font-size:16px;font-weight:700;color:#fff;flex-shrink:0">3</div>
-          <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">
-            Нажми <strong style="color:#fff">«Добавить»</strong>
-          </div>
-        </div>
-      </div>
-      <button onclick="this.closest('[style*=inset]').remove()"
-        style="width:100%;margin-top:22px;padding:14px;background:#0a0a0f;
-        color:#fff;border:none;border-radius:14px;font-size:15px;
-        font-weight:600;font-family:sans-serif;cursor:pointer">Понятно</button>
-    </div>
-  `;
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);display:flex;align-items:flex-end;padding:12px;';
+  ov.innerHTML = `<div style="background:#1c1c1e;border-radius:22px;padding:24px;width:100%;border:1px solid rgba(255,255,255,.12)"><div style="font-size:17px;font-weight:700;margin-bottom:20px;text-align:center;color:#fff">Установка на iPhone</div><div style="display:flex;flex-direction:column;gap:16px"><div style="display:flex;align-items:center;gap:14px"><div style="width:36px;height:36px;background:#0d0f14;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0">1</div><div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">Нажми <strong style="color:#fff">«Поделиться» ⎙</strong> внизу Safari</div></div><div style="display:flex;align-items:center;gap:14px"><div style="width:36px;height:36px;background:#0d0f14;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0">2</div><div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">Выбери <strong style="color:#fff">«На экран «Домой»»</strong></div></div><div style="display:flex;align-items:center;gap:14px"><div style="width:36px;height:36px;background:#0d0f14;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0">3</div><div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.4">Нажми <strong style="color:#fff">«Добавить»</strong></div></div></div><button onclick="this.closest('[style*=inset]').remove()" style="width:100%;margin-top:22px;padding:14px;background:#0d0f14;color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:600;font-family:sans-serif;cursor:pointer">Понятно</button></div>`;
   document.body.appendChild(ov);
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
 }
